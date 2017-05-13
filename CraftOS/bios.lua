@@ -561,65 +561,6 @@ for n,sFile in ipairs( tApis ) do
     end
 end
 
-if turtle then
-    -- Load turtle APIs
-    local tApis = fs.list( "rom/apis/turtle" )
-    for n,sFile in ipairs( tApis ) do
-        if string.sub( sFile, 1, 1 ) ~= "." then
-            local sPath = fs.combine( "rom/apis/turtle", sFile )
-            if not fs.isDir( sPath ) then
-                if not os.loadAPI( sPath ) then
-                    bAPIError = true
-                end
-            end
-        end
-    end
-end
-
-if pocket and fs.isDir( "rom/apis/pocket" ) then
-    -- Load pocket APIs
-    local tApis = fs.list( "rom/apis/pocket" )
-    for n,sFile in ipairs( tApis ) do
-        if string.sub( sFile, 1, 1 ) ~= "." then
-            local sPath = fs.combine( "rom/apis/pocket", sFile )
-            if not fs.isDir( sPath ) then
-                if not os.loadAPI( sPath ) then
-                    bAPIError = true
-                end
-            end
-        end
-    end
-end
-
-if commands and fs.isDir( "rom/apis/command" ) then
-    -- Load command APIs
-    if os.loadAPI( "rom/apis/command/commands" ) then
-        -- Add a special case-insensitive metatable to the commands api
-        local tCaseInsensitiveMetatable = {
-            __index = function( table, key )
-                local value = rawget( table, key )
-                if value ~= nil then
-                    return value
-                end
-                if type(key) == "string" then
-                    local value = rawget( table, string.lower(key) )
-                    if value ~= nil then
-                        return value
-                    end
-                end
-                return nil
-            end
-        }
-        setmetatable( commands, tCaseInsensitiveMetatable )
-        setmetatable( commands.async, tCaseInsensitiveMetatable )
-
-        -- Add global "exec" function
-        exec = commands.exec
-    else
-        bAPIError = true
-    end
-end
-
 if bAPIError then
     print( "Press any key to continue" )
     os.pullEvent( "key" )
@@ -636,30 +577,6 @@ settings.set( "lua.autocomplete", true )
 settings.set( "list.show_hidden", false )
 if term.isColour() then
     settings.set( "bios.use_multishell", true )
-end
-if _CC_DEFAULT_SETTINGS then
-    for sPair in string.gmatch( _CC_DEFAULT_SETTINGS, "[^,]+" ) do
-        local sName, sValue = string.match( sPair, "([^=]*)=(.*)" )
-        if sName and sValue then
-            local value
-            if sValue == "true" then
-                value = true
-            elseif sValue == "false" then
-                value = false
-            elseif sValue == "nil" then
-                value = nil
-            elseif tonumber(sValue) then
-                value = tonumber(sValue)
-            else
-                value = sValue
-            end
-            if value ~= nil then
-                settings.set( sName, value )
-            else
-                settings.unset( sName )
-            end
-        end
-    end
 end
 
 -- Load user settings
