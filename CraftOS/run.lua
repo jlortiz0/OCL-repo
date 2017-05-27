@@ -5,6 +5,7 @@ local component = component or require("component")
 local computer = computer or package.loaded.computer
 local rdir = filesystem.concat(filesystem.concat(os.getenv("PWD"), require("process").info().path), "..")
 local timers = {}
+local events = {}
 filesystem.link(filesystem.concat(rdir, "/rom/"), filesystem.concat(rdir, "/home/rom"))
 local env = {
   ["os"] = {
@@ -12,7 +13,7 @@ local env = {
     ["clock"] = computer.uptime,
     ["day"] = function() return 1 end,
     ["time"] = function() return 6000 end,
-    ["shutdown"] = function() computer.shutdown() end,
+   -- ["shutdown"] = function() computer.shutdown() end,
     ["reboot"] = function() computer.shutdown(true) end,
     ["getComputerID"] = function() end,
     ["startTimer"]=function(n)
@@ -22,6 +23,9 @@ local env = {
       until not timers[id]
       timers[id]=n+os.uptime()
       return id
+    end,
+    ["cancelTimer"]=function(n)
+      timers[id]=nil
     end,
   },
   ["fs"] ={
@@ -41,6 +45,7 @@ local env = {
      return filesystem.isDirectory(dir)
     end,
     ["exists"] = function(f)
+      if string.find(f, rdir) then return filesystem.exists(f) end
       return filesystem.exists(filesystem.concat(rdir, "/home/", filesystem.canonical(f)))
     end,
     ["getDir"] = filesystem.path,
@@ -49,7 +54,6 @@ local env = {
       return filesystem.concat(rdir, "/home/", filesystem.canonical(a1), filesystem.canonical(a2))
     end,
     ["open"]=function(path, mode)
-     print(path)
      local stream, e
      if string.find(path, rdir) then
        stream, e = require("io").open(path, mode)
@@ -88,6 +92,7 @@ local env = {
   ["xpcall"]=xpcall,
   ["call"] = call,
   ["pairs"]=pairs,
+  ["math"] = math,
   ["term"] = {
     ["write"]=nterm.write,
     ["clear"]=nterm.clear,
@@ -99,11 +104,11 @@ local env = {
     ["getSize"]=nterm.getViewport,
     ["isColor"]=function() return false end,
     ["isColour"]=function() return false end,
-    ["getBackgroundColor"]=component.gpu.getBackground,
-    ["setBackgroundColor"]=component.gpu.setBackground,
-    ["getTextColor"]=component.gpu.getForeground,
-    ["setTextColor"]=component.gpu.setForeground,
-    ["scroll"]=function() end,
+    ["getBackgroundColor"]=function() return 32768 end,
+    ["setBackgroundColor"]=function() end,
+    ["getTextColor"]=function() return 1 end,
+    ["setTextColor"]=function() end,
+    ["scroll"]=function(n) for i=1, n do print() end end,
   },
   ["select"]=select,
   ["tostring"]=tostring,
@@ -111,18 +116,47 @@ local env = {
   ["type"]=type,
   ["error"]=error,
 }
+env.term.setTextColour = env.term.setTextColor
+env.term.getTextColour = env.term.getTextColor
+env.term.setBackgroundColour = env.term.setBackgroundColor
+env.term.getBackgroundColour = env.term.setBackgroundColor
 env._ENV=env
 env._G=env
 local th=coroutine.create(loadfile(filesystem.concat(rdir, "bios.lua"), "t", env))
+local data, newevent = {}
 while true do
-  local ed = {coroutine.resume(th,event.pull())}
+  local ed = {coroutine.resume(th,table.unpack(data))}
   if coroutine.status(th)=="dead" then
     print(table.unpack(ed))
     break
   end
-  for k,v in pairs(timers) do
-   if os.uptime()<=v then
-     computer.pushEvent("timer", k)
-   end
-  end
+  data = nil
+  repeat
+    for k,v in pairs(timers) do
+     if os.uptime()<=v then
+       table.insert(events, {"timer", k})
+       timers[k]=nil
+     end
+    end
+    while #events>0 do
+      if events[1][1]==ed[2] or not ed[2] then
+        data = table.remove(events, 1)
+      else
+        table.remove(events, 1)
+      end
+    end
+    if not data then
+      newevent = {event.pull()}
+      if newevent[1]=="clipboard" then
+        table.insert(events, {"paste", newevent[3]})
+      elseif newevent[1]=="key_down" then
+        table.insert(events, {"key", newevent[4]})
+        if newevent[3]>31 and newevent[3]<127 then
+          table.insert(events, {"char", string.char(newevent[3])})
+        end
+      elseif newevent[1]=="interrupted" then
+        data = {"terminated"}
+      end
+    end
+  until data
 end
