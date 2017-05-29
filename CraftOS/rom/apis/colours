@@ -1,11 +1,13 @@
 -- Colours (for lovers of british spelling)
-local colours = _ENV
+if not colors then
+  os.loadAPI("rom/apis/colors")
+end
 for k,v in pairs(colors) do
-	colours[k] = v
+	_ENV[k] = v
 end
 
-colours.grey = colors.gray
-colours.gray = nil
+_ENV.grey = colors.gray
+_ENV.gray = nil
 
-colours.lightGrey = colors.lightGray
-colours.lightGray = nil
+_ENV.lightGrey = colors.lightGray
+_ENV.lightGray = nil

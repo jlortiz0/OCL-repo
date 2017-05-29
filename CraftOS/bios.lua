@@ -571,7 +571,7 @@ end
 -- Set default settings
 settings.set( "shell.allow_startup", true )
 settings.set( "shell.allow_disk_startup", (commands == nil) )
-settings.set( "shell.autocomplete", true )
+settings.set( "shell.autocomplete", false )
 settings.set( "edit.autocomplete", true )
 settings.set( "lua.autocomplete", true )
 settings.set( "list.show_hidden", false )
