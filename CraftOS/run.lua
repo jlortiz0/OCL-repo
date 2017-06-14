@@ -18,8 +18,7 @@ local env = {
     ["clock"] = computer.uptime,
     ["day"] = function() return 1 end,
     ["time"] = function() return 6000 end,
-    ["shutdown"] = function() run=nil env=nil end,
-    ["reboot"] = function() print("Reboot it yourself!") run=nil env=nil end,
+    ["shutdown"] = function() run=nil end,
     ["getComputerID"] = function() return set.id end,
     ["computerID"]=function() return set.id end,
     ["setComputerID"]=function(id) checkArg(1, id, "number") set.id=id end,
@@ -35,6 +34,7 @@ local env = {
       return id
     end,
     ["cancelTimer"]=function(id) tim[id]=nil end,
+    ["OpenOS"]=true,
   },
   ["fs"] ={
     ["list"] = function(dir)
@@ -128,6 +128,7 @@ local env = {
   ["pairs"]=pairs,
   ["math"] = math,
   ["term"] = {
+    ["blit"]=function(s) nterm.write(s) end,
     ["write"]=nterm.write,
     ["clear"]=nterm.clear,
     ["current"]=nterm.gpu,
@@ -136,13 +137,22 @@ local env = {
     ["setCursorBlink"]=function(b) cursor=b end,
     ["clearLine"]=nterm.clearLine,
     ["getSize"]=nterm.getViewport,
-    ["isColor"]=function() return false end,
-    ["isColour"]=function() return false end,
-    ["getBackgroundColor"]=function() return 32768 end,
-    ["setBackgroundColor"]=function() end,
+    ["isColor"]=function() return (component.gpu.getDepth()>2) end,
+    --["isColor"]=function() return false end,
+    ["getBackgroundColor"]=function() return component.gpu.getBackground() end,
+    ["setBackgroundColor"]=function(...) component.gpu.setBackground(...) end,
     ["getTextColor"]=function() return 1 end,
     ["setTextColor"]=function() end,
     ["scroll"]=function(n) for i=1, n do print() end end,
+  },
+  ["bit"]={
+    ["blshift"]=bit32.lshift,
+    ["brshift"]=bit32.arshift,
+    ["blogic_rshift"]=bit32.rshift,
+    ["bxor"]=bit32.bxor,
+    ["bor"]=bit32.bor,
+    ["band"]=bit32.band,
+    ["bnot"]=bit32.bnot,
   },
   ["select"]=select,
   ["tostring"]=tostring,
@@ -171,6 +181,7 @@ env.term.setTextColour = env.term.setTextColor
 env.term.getTextColour = env.term.getTextColor
 env.term.setBackgroundColour = env.term.setBackgroundColor
 env.term.getBackgroundColour = env.term.setBackgroundColor
+env.term.isColour=env.term.isColor
 if component.isAvailable("restone") then
   env.restone = {
     ["getInput"]=function(side) return (component.redstone.getInput(sides[side])>0) end,
@@ -193,6 +204,7 @@ else
    ["setAnalogOutput"]=function() end,
   }
 end
+env.bit32 = env.bit
 env.redstone.getBundledInput=function() return 0 end
 env.redstone.getBundledOutput=function() return 0 end
 env.redstone.setBundledOutput=function() end
@@ -201,7 +213,6 @@ env.redstone.getSides = function() return {"top", "bottom", "left", "right", "fr
 env.rs = env.redstone
 local function getAddrDisk()
   local ls = component.list("filesystem")
-  --if #ls<3 then return false end
   for k in pairs(ls) do
     if k~=computer.tmpAddress() and k~=computer.getBootAddress() then
       return k
@@ -238,9 +249,9 @@ env.peripheral.call = function(side, method, ...)
 end
 if component.isAvailable("internet") and component.internet.isHttpEnabled() then
 env.http={
-  ["request"]=function(url, post, headers)
+  ["request"]=function(url, post, headers, async)
     local h,err=component.internet.request(url, post, headers)
-    if not h then table.insert(events, {"http_failure", url, err}) return end
+    if not h then if async then table.insert(events, {"http_failure", url, err}) else return nil,err end return end
     repeat
       os.sleep(0.05)
     until h:finishConnect()~=false
@@ -261,19 +272,19 @@ env.http={
         ["readAll"]=function() return f:read("*a") end,
         ["getResponseCode"]=function() return res end,
       }
-      table.insert(events, {"http_success", url, h})
-      return
+      if async then table.insert(events, {"http_success", url, h}) end
+      return h
     end
   end,
   ["checkURL"]=function(url)
-    return pcall(function() component.internet.request(url):close() end)
+    return pcall(function() component.internet.request(url or ""):close() end)
   end,
 }
 end
 env._ENV=env
 env._G=env
-nterm.clear()
-th=coroutine.create(loadfile(filesystem.concat(rdir, "../bios.lua"), "t", env))
+env.os.reboot= function(...) nterm.clear() th=coroutine.create(loadfile(filesystem.concat(rdir, "../bios.lua"), "t", env)) if not ... then table.insert(events, {}) coroutine.yield() end end
+env.os.reboot(1)
 local data, newevent = {}
 while true do
   local ed = {coroutine.resume(th,table.unpack(data))}
@@ -282,7 +293,12 @@ while true do
     f:write(require("serialization").serialize(set))
     f:close()
     f=nil
-    print(table.unpack(ed))
+    if ed[1] then
+      print("Exited sucesssfully.")
+    else
+      print("CraftOS crashed! Details:")
+      print(table.unpack(ed,2))
+    end
     env=nil
     filesystem.umount(filesystem.concat(rdir, "disk"))
     break

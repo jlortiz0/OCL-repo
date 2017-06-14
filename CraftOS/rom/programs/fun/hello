@@ -1,5 +1,10 @@
 if term.isColour() then
-	term.setTextColour( 2^math.random(0,15) )
+  local rnd,nColor=math.random(1,15)
+  for i=1, 15 do
+    nColor=next(colors, nColor)
+    if i==rnd then break end
+  end
+	term.setTextColour( colors[nColor] )
 end
 textutils.slowPrint( "Hello World!" )
 term.setTextColour( colours.white )
