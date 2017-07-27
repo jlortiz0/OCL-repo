@@ -89,6 +89,7 @@ local env = {
         return filesystem.concat(filesystem.canonical(a1), a2)
     end,
     ["open"]=function(path, mode)
+     if not mode then error("Expected string, string", 2) end
      local stream, e = require("io").open(filesystem.concat(rdir, filesystem.canonical(path)), mode)
      if not stream then
       error(e)
@@ -221,6 +222,7 @@ end
 if getAddrDisk() then
   filesystem.mount(getAddrDisk(), filesystem.concat(rdir, "disk"))
 end
+local channels = {}
 local methods = {["left"]={
 ["isDiskPresent"]=function() return (getAddrDisk()~=nil) end,
 ["hasData"]=function() return (getAddrDisk()~=nil) end,
@@ -234,8 +236,29 @@ local methods = {["left"]={
 ["stopAudio"]=function() end,
 ["ejectDisk"]=function() end,
 },["top"]={
-
+["open"]=function(n) if n>-1 and n<65536 then channels[n]=true end end,
+["isOpen"]=function(n) return channels[n]==true end,
+["close"]=function(n) channels[n]=nil end,
+["closeAll"]=function() channels={} end,
+["isWireless"]=function() return true end,
+["transmit"]=function(ch, rep, msg)
+  if type(ch)~="number" or type(ch)~=type(rep) then error("Expected number, number, any") end
+  msg = require("serialization").serialize(msg)
+  local max,tmsg=component.modem.maxPacketSize()-42, {}
+  for i=1, math.ceil(#msg/max) do
+    table.insert(tmsg, msg:sub(1, max))
+    msg = msg:sub(max+1)
+  end
+  for i=1, #tmsg do
+    component.modem.broadcast(507, ch, rep, i, #tmsg, tmsg[i])
+  end
+end,
 }}
+if component.modem then
+  component.modem.open(507)
+else
+  methods.top=nil
+end
 env.peripheral.getMethods = function(side)
   local l = {}
   for k in pairs(methods[side]) do
@@ -249,31 +272,27 @@ end
 if component.isAvailable("internet") and component.internet.isHttpEnabled() then
 env.http={
   ["request"]=function(url, post, headers, async)
-    local h,err=component.internet.request(url, post, headers)
-    if not h then if async then table.insert(events, {"http_failure", url, err}) else return nil,err end return end
-    repeat
-      os.sleep(0.05)
-    until h:finishConnect()~=false
-    if not ({h:finishConnect()})[1] then
-      table.insert(events, {"http_failure", url, select(2, h:finishConnect())})
-      return
-    else
-      local name = os.tmpname()
-      local f = io.open(name, "w")
-      f:write(h.read(math.huge))
-      f:close()
-      local res = h.response()
-      h:close()
-      f=io.open(name, "r")
-      h={
-        ["close"]=function() f:close() filesystem.remove(name) end,
-        ["readLine"]=function() return f:read("*l") end,
-        ["readAll"]=function() return f:read("*a") end,
-        ["getResponseCode"]=function() return res end,
-      }
-      if async then table.insert(events, {"http_success", url, h}) end
-      return h
+    local ok, err=pcall(require("internet").request, url, post, headers)
+    if not ok then if async then table.insert(events, {"http_failure", url, err}) else error(err) end return end
+    local name = os.tmpname()
+    local f = io.open(name, "wb")
+    for chunk in err do
+      f:write(chunk)
     end
+    f:close()
+    f=component.internet.request(url)
+    local res =f.response()
+    f:close()
+    f=io.open(name, "r")
+    err={
+      ["close"]=function() f:close() event.timer(5, function() filesystem.remove(name) end, 1) end,
+      ["readLine"]=function() return f:read("*l") end,
+      ["readAll"]=function() return f:read("*a") end,
+      ["getResponseCode"]=function() return res end,
+    }
+    print("get")
+    if async then table.insert(events, {"http_success", url, err}) end
+    return err
   end,
   ["checkURL"]=function(url)
     return pcall(function() component.internet.request(url or ""):close() end)
@@ -284,7 +303,7 @@ env._ENV=env
 env._G=env
 env.os.reboot= function(...) nterm.clear() th=coroutine.create(loadfile(filesystem.concat(rdir, "../bios.lua"), "t", env)) if not ... then table.insert(events, {}) coroutine.yield() end end
 env.os.reboot(1)
-local data, newevent = {}
+local data, mmsg, newevent = {}, {}
 while true do
   local ed = {coroutine.resume(th,table.unpack(data))}
   if coroutine.status(th)=="dead" or not run then
@@ -350,6 +369,16 @@ while true do
       table.insert(events, {"disk_eject", "left"})
     elseif newevent[1]=="interrupted" then
       data = {"terminate"}
+    elseif newevent[1]=="modem_message" then
+      if newevent[4]==507 and channels[newevent[6]] then
+        if newevent[9]==1 then
+          table.insert(events, {"modem_message", "top", newevent[6], newevent[7], require("serialization").unserialize(newevent[10]), newevent[5]})
+        elseif mmsg[newevent[2]] then
+        else
+          mmsg[newevent[2]]={newevent[6], newevent[7], newevent[5], newevent[9], newevent[10]}
+          print(table.unpack(mmsg[newevent[2]]))
+        end
+      end
     end
   until data
 end

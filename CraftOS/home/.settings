@@ -1,9 +1,9 @@
 {
-  [ "list.show_hidden" ] = true,
-  [ "shell.autocomplete" ] = false,
-  [ "shell.allow_startup" ] = true,
-  [ "shell.allow_disk_startup" ] = true,
+  [ "bios.use_multishell" ] = true,
   [ "lua.autocomplete" ] = true,
+  [ "shell.allow_disk_startup" ] = true,
+  [ "list.show_hidden" ] = true,
+  [ "shell.allow_startup" ] = true,
+  [ "shell.autocomplete" ] = false,
   [ "edit.autocomplete" ] = true,
-  [ "bios.use_multishell" ] = false,
 }
