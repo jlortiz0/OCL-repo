@@ -4,6 +4,7 @@ local filesystem = require("filesystem")
 local nterm = require("term")
 local component = component or require("component")
 local computer = computer or package.loaded.computer
+local bit32 = require("bit32")
 local rdir = filesystem.concat(filesystem.concat(os.getenv("PWD"), require("process").info().path), "../home")
 local events,tim = {}, {}
 local run,cusor, th = true,false
@@ -374,9 +375,16 @@ while true do
         if newevent[9]==1 then
           table.insert(events, {"modem_message", "top", newevent[6], newevent[7], require("serialization").unserialize(newevent[10]), newevent[5]})
         elseif mmsg[newevent[2]] then
+          mmsg[newevent[2]]=mmsg[newevent[2]]..newevent[10]
+          if newevent[8]==newevent[9] then
+            table.insert(events, {"modem_message", "top", newevent[6], newevent[7], require("serialization").unserialize(mmsg[newevent[2]]), newevent[5]})
+            newevent[9]=require("io").open(filesystem.concat(rdir, "../rednet.log"), "w")
+            newevent[9]:write(mmsg[newevent[2]])
+            newevent[9]:close()
+            mmsg[newevent[2]]=nil
+          end
         else
-          mmsg[newevent[2]]={newevent[6], newevent[7], newevent[5], newevent[9], newevent[10]}
-          print(table.unpack(mmsg[newevent[2]]))
+          mmsg[newevent[2]]=newevent[10]
         end
       end
     end

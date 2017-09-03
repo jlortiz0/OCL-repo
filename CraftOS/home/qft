@@ -1,0 +1,47 @@
+local tArgs = {...}
+if #tArgs<2 then
+  print("Usage:")
+  print("qft send <file> <id>")
+  print("qft get <file>")
+  return
+end
+if tArgs[1]=="send" then
+  tArgs[2]=shell.resolve(tArgs[2])
+  tArgs[3]=tonumber(tArgs[3])
+  print("Waiting for ready signal...")
+  while true do
+    rednet.send(tArgs[3], "sendready", "qft")
+    local rid, msg = rednet.receive("qft", 10)
+    if rid==tArgs[3] and msg=="receiveready" then
+      local h = fs.open(tArgs[2], "r")
+      rednet.send(rid, h.readAll(), "qft")
+      h.close()
+      print("File sent!")
+      break
+    end
+  end
+else
+  tArgs[2]=shell.resolve(tArgs[2])
+  if fs.exists(tArgs[2]) then
+    print("Warning: File already exists. Overwrite it?(y/n)")
+    local _,key = os.pullEvent("char")
+    if key ~= "y" then return end
+  end
+  while true do
+    print("Waiting for file send...")
+    local sid, msg = rednet.receive("qft")
+    if msg=="sendready" then
+      rednet.send(sid, "receiveready", "qft")
+      local id, msg=rednet.receive("qft", 5)
+      if sid==id then
+        local h=fs.open(tArgs[2], "w")
+        h.write(msg)
+        h.close()
+        print("File received!")
+        break
+      else
+        print("Sid error", sid, id)
+      end
+    end
+  end
+end
