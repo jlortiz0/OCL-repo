@@ -31,6 +31,7 @@ else
 	textColour = colours.white
 	bgColour = colours.black
 end
+print(textColour, promptColour)
 
 local function run( _sCommand, ... )
 	local sPath = shell.resolveProgram( _sCommand )
@@ -321,7 +322,7 @@ else
     term.setTextColour( promptColour )
     print( os.version() )
     term.setTextColour( textColour )
-
+    print(textColour, promptColour)
     -- Run the startup program
     if parentShell == nil then
         shell.run( "/rom/startup" )

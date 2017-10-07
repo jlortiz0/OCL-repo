@@ -59,21 +59,28 @@ local env = {
       return filesystem.exists(filesystem.concat(rdir, filesystem.canonical(f)))
     end,
     ["delete"] = function(dir)
+      if string.sub(filesystem.canonical("/"..dir), 1, 5)=="/rom/" then error("Access denied.", 2) end
+      if filesystem.canonical("/"..dir)=="/disk" then error("Access denied.", 2) end
       dir=filesystem.concat(rdir, filesystem.canonical(dir))
       filesystem.remove(dir)
     end,
     ["move"]=function(p1, p2)
+      if string.sub(filesystem.canonical("/"..p1), 1, 4)=="/rom" or string.sub(filesystem.canonical("/"..p2), 1, 5)=="/rom/" then error("Access denied.", 2) end
+      if filesystem.canonical("/"..p1)=="/disk" then error("Access denied.", 2) end
       p1=filesystem.concat(rdir, filesystem.canonical(p1))
       p2=filesystem.concat(rdir, filesystem.canonical(p2))
       filesystem.rename(p1, p2)
     end,
     ["copy"]=function(p1, p2)
+      if string.sub(filesystem.canonical("/"..p2), 1, 5)=="/rom/" then error("Access denied.", 2) end
       p1=filesystem.concat(rdir, filesystem.canonical(p1))
       p2=filesystem.concat(rdir, filesystem.canonical(p2))
       filesystem.copy(p1, p2)
     end,
     ["makeDir"]=function(path)
+      if string.sub(filesystem.canonical("/"..path), 1, 5)=="/rom/" then error("Access denied", 2) end
       path=filesystem.concat(rdir, filesystem.canonical(path))
+      if filesystem.exists(path) then error("Directory exists.", 2) end
       filesystem.makeDirectory(path)
     end,
     ["getDir"] = filesystem.path,
@@ -91,9 +98,11 @@ local env = {
     end,
     ["open"]=function(path, mode)
      if not mode then error("Expected string, string", 2) end
+     if filesystem.isDirectory(filesystem.concat(rdir, filesystem.canonical(path))) then error("Is a directory", 2) end
+     if (mode=="w" or mode=="a" or mode =="wb" or mode=="ab") and string.sub(filesystem.canonical("/"..path), 1, 5)=="/rom/" then error("Access denied.", 2) end
      local stream, e = require("io").open(filesystem.concat(rdir, filesystem.canonical(path)), mode)
      if not stream then
-      error(e)
+      error(e, 2)
      end
      local ret = {
        ["close"] = function() stream:close() end,
