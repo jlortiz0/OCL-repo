@@ -35,7 +35,6 @@ local env = {
       return id
     end,
     ["cancelTimer"]=function(id) tim[id]=nil end,
-    ["OpenOS"]=true,
   },
   ["fs"] ={
     ["list"] = function(dir)
@@ -112,7 +111,7 @@ local env = {
        ret.readLine = function() return stream:read("*l") end
     elseif mode=="w" or mode=="a" then
       ret.write = function(t) stream:write(t) end
-      ret.writeLine = function(t) stream:write(t.."\n") end
+      ret.writeLine = function(t) stream:write((t or "").."\n") end
       ret.flush = function() stream:flush() end
     elseif mode=="rb" then
       ret.read = function() return string.byte(stream:read(1)) end
@@ -168,6 +167,14 @@ local env = {
   ["tostring"]=tostring,
   ["tonumber"]=tonumber,
   ["type"]=type,
+  ["assert"]=assert,
+  ["rawset"]=rawset,
+  ["rawget"]=rawget,
+  ["rawequal"]=rawequal,
+  ["loadstring"]=function(s,n) load(s, n, "t") end,
+  ["_CC_DEFAULT_SETTINGS"]="",
+  ["_HOST"]="OpenComputers ("..(_OSVERSION or "unknown OS")..")",
+  ["_VERSION"]=_VERSION,
   ["error"]=error,
   ["next"]=next,
   ["peripheral"] = {
@@ -309,10 +316,10 @@ env.http={
   end,
 }
 end
-env._ENV=env
 env._G=env
-env.os.reboot= function(...) nterm.clear() th=coroutine.create(loadfile(filesystem.concat(rdir, "../bios.lua"), "t", env)) if not ... then table.insert(events, {}) coroutine.yield() end end
-env.os.reboot(1)
+env._ENV=env
+env._G.os.reboot= function(...) nterm.clear() th=coroutine.create(loadfile(filesystem.concat(rdir, "../bios.lua"), "t", env)) if not ... then table.insert(events, {}) coroutine.yield() end end
+env._G.os.reboot(1)
 local data, mmsg, newevent = {}, {}
 while true do
   local ed = {coroutine.resume(th,table.unpack(data))}
