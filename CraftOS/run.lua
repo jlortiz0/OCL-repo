@@ -13,12 +13,36 @@ local set = require("serialization").unserialize(f:read(math.huge))
 f:close()
 f=nil
 filesystem.link(filesystem.concat(rdir, "../rom"), filesystem.concat(rdir, "rom"))
+local colourls={
+  0xF0F0F0,
+  0xF2B233,
+  [4]=0xE57FD8,
+  [8]=0x99B2F2,
+  [16]=0xDEDE6C,
+  [32]=0x7FCC19,
+  [64]=0xF2B2CC,
+  [128]=0x4C4C4C,
+  [256]=0x999999,
+  [512]=0x4C99B2,
+  [1024]=0xB266E5,
+  [2048]=0x3366CC,
+  [4096]=0x7F664C,
+  [8192]=0x57A64E,
+  [16384]=0xCC4C4C,
+  [32768]=0x191919,
+}
 local env = {
   ["os"] = {
     ["queueEvent"]=function(...) table.insert(events, {...}) end,
     ["clock"] = computer.uptime,
-    ["day"] = function() return 1 end,
-    ["time"] = function() return 6 end,
+    ["day"] = function() 
+      local tim=os.date("*t", os.time())
+      return tim.yday+((tim.year-1970)*365.25)
+    end,
+    ["time"] = function()
+      local tim=os.date("*t", os.time())
+      return tim.hour +1+ ((tim.min*60)+tim.sec)/3000
+    end,
     ["shutdown"] = function() run=nil end,
     ["getComputerID"] = function() return set.id end,
     ["computerID"]=function() return set.id end,
@@ -35,6 +59,20 @@ local env = {
       return id
     end,
     ["cancelTimer"]=function(id) tim[id]=nil end,
+    ["epoch"]=function(type)
+      if type=="utc" then
+        local a = os.tmpname()
+        io.open(a, "w"):close()
+        local final = tonumber(tostring(filesystem.lastModified(a)):sub(1,-4))
+        filesystem.remove(a)
+        return final
+      elseif (not type) or type=="ingame" then
+        local tim=os.date("*t", os.time())
+        return tim.yday+((tim.year-1970)*365.25) * 86400000 + ((tim.hour+((tim.min*60)+tim.sec)/3000) * 3600000)
+      else
+        error("Unsupported mode", 2)
+      end
+    end,
   },
   ["fs"] ={
     ["list"] = function(dir)
@@ -141,18 +179,48 @@ local env = {
     ["blit"]=function(s) nterm.write(s) end,
     ["write"]=nterm.write,
     ["clear"]=nterm.clear,
-    ["current"]=nterm.gpu,
     ["getCursorPos"]=nterm.getCursor,
     ["setCursorPos"]=nterm.setCursor,
     ["setCursorBlink"]=function(b) cursor=b end,
     ["clearLine"]=nterm.clearLine,
     ["getSize"]=nterm.getViewport,
     ["isColor"]=function() return (component.gpu.getDepth()>2) end,
-    ["getBackgroundColor"]=function() return component.gpu.getBackground() end,
-    ["setBackgroundColor"]=function(c) component.gpu.setBackground(c) end,
-    ["getTextColor"]=function() return component.gpu.getForeground() end,
-    ["setTextColor"]=function(c) component.gpu.setForeground(c) end,
+    ["getBackgroundColor"]=function() 
+      local a = component.gpu.getBackground() 
+      for k,v in pairs(colourls) do
+        if v==a then
+          return k
+        end
+      end
+      error("Background colour set to impossible value "..a.."!")
+    end,
+    ["setBackgroundColor"]=function(c) 
+      if not colourls[c] then error("Invalid colour!", 2) end
+      component.gpu.setBackground(colourls[c]) 
+    end,
+    ["getTextColor"]=function() 
+      local a = component.gpu.getForeground() 
+      for k,v in pairs(colourls) do
+        if v==a then
+          return k
+        end
+      end
+      error("Text colour set to impossible value "..a.."!")
+    end,
+    ["setTextColor"]=function(c) 
+      if not colourls[c] then error("Invalid colour!", 2) end
+      component.gpu.setForeground(colourls[c]) 
+    end,
     ["scroll"]=function(n) for i=1, n do print() end end,
+    ["getPaletteColor"]=function(num)
+      if not colourls[num] then error("Invalid colour (got "..num..")!", 2) end
+      return tonumber("0x"..string.format("%x", tostring(colourls[num])):sub(5,6))/255, tonumber("0x"..string.format("%x", tostring(colourls[num])):sub(3,4))/255, tonumber("0x"..string.format("%x", tostring(colourls[num])):sub(1,2))/255
+    end,
+    ["setPaletteColor"]=function(num, r, g, b)
+      if not colourls[num] then error("Invalid colour (got "..num..")!", 2) end
+      local oldnum=colourls[num]/1
+      colourls[num]=(r*255*0x10000)+(g*255*0x100)+(b*255)
+    end,
   },
   ["bit"]={
     ["blshift"]=bit32.lshift,
@@ -163,6 +231,8 @@ local env = {
     ["band"]=bit32.band,
     ["bnot"]=bit32.bnot,
   },
+  ---REMOVE THIS LINE
+  ["debug"]=debug,
   ["select"]=select,
   ["tostring"]=tostring,
   ["tonumber"]=tonumber,
@@ -199,6 +269,8 @@ env.term.getTextColour = env.term.getTextColor
 env.term.setBackgroundColour = env.term.setBackgroundColor
 env.term.getBackgroundColour = env.term.setBackgroundColor
 env.term.isColour=env.term.isColor
+env.term.setPaletteColour=env.term.setPaletteColor
+env.term.getPaletteColour=env.term.getPaletteColor
 if component.isAvailable("restone") then
   env.restone = {
     ["getInput"]=function(side) return (component.redstone.getInput(sides[side])>0) end,
@@ -316,10 +388,13 @@ env.http={
   end,
 }
 end
+env.term.current=function() return env.term end
 env._G=env
 env._ENV=env
 env._G.os.reboot= function(...) nterm.clear() th=coroutine.create(loadfile(filesystem.concat(rdir, "../bios.lua"), "t", env)) if not ... then table.insert(events, {}) coroutine.yield() end end
 env._G.os.reboot(1)
+component.gpu.setBackground(0xF0F0F0)
+component.gpu.setForeground(0x191919)
 local data, mmsg, newevent = {}, {}
 while true do
   local ed = {coroutine.resume(th,table.unpack(data))}
@@ -335,6 +410,7 @@ while true do
       print(table.unpack(ed,2))
     end
     env=nil
+    colours=nil
     filesystem.umount(filesystem.concat(rdir, "disk"))
     break
   end

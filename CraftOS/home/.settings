@@ -1,9 +1,11 @@
 {
-  [ "bios.use_multishell" ] = true,
-  [ "lua.autocomplete" ] = true,
-  [ "shell.allow_disk_startup" ] = true,
+  [ "edit.default_extension" ] = "lua",
   [ "list.show_hidden" ] = true,
-  [ "shell.allow_startup" ] = true,
+  [ "shell.allow_disk_startup" ] = true,
+  [ "paint.default_extension" ] = "nfp",
   [ "shell.autocomplete" ] = false,
+  [ "lua.autocomplete" ] = true,
+  [ "bios.use_multishell" ] = true,
   [ "edit.autocomplete" ] = true,
+  [ "shell.allow_startup" ] = true,
 }
